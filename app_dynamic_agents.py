@@ -305,6 +305,7 @@ COMMAND_HELP = {
 
 可用命令:
   /create   - 创建Agent
+  /update   - 更新Agent配置
   /delete   - 删除Agent
   /setmodel - 设置Agent模型
   /list     - 列出所有Agent
@@ -385,6 +386,24 @@ JSON创建:
 注意: 
   - 默认模型(default)无法删除
   - 删除后使用该模型的Agent会自动切换到default""",
+    "update": """📌 /update - 更新Agent配置
+
+用法:
+  /update <Agent名称> <字段>=<值> [<字段>=<值>...]
+
+可更新字段:
+  display_name - 显示名称
+  description  - 描述
+  sys_prompt   - 系统提示词
+  model        - 使用的模型
+
+示例:
+  /update py display="Python高级专家"
+  /update py sys_prompt="你是Python专家..." model=gpt4
+  /update fe display="前端专家" desc="Vue和React专家"
+
+JSON格式:
+  /update py {"display_name":"Python专家","sys_prompt":"..."}""",
     "chat": """📌 @<名称> - 与Agent对话
 
 用法:
@@ -517,6 +536,8 @@ def process_message_sync(text: str, user_id: str = "default") -> str:
         return COMMAND_HELP.get("addmodel", "无帮助信息")
     if text in ["/delmodel help", "/delmodel ?"]:
         return COMMAND_HELP.get("delmodel", "无帮助信息")
+    if text in ["/update help", "/update ?"]:
+        return COMMAND_HELP.get("update", "无帮助信息")
     if text in ["/chat help", "/chat ?"]:
         return COMMAND_HELP.get("chat", "无帮助信息")
     
@@ -584,6 +605,55 @@ def process_message_sync(text: str, user_id: str = "default") -> str:
         if agent_manager.delete_agent(name):
             return f"✅ 已删除Agent @{name}"
         return f"❌ Agent @{name} 不存在"
+    
+    if text.startswith("/update "):
+        rest = text[8:].strip()
+        parts = rest.split(None, 1)
+        if len(parts) < 2:
+            return "用法: /update <Agent名称> <字段>=<值> ...\n输入 /update help 查看详细帮助"
+        
+        agent_name = parts[0]
+        update_str = parts[1]
+        
+        if agent_name not in agent_manager.agent_configs:
+            return f"❌ Agent @{agent_name} 不存在\n可用: {list(agent_manager.agents.keys())}"
+        
+        # 解析更新内容
+        updates = {}
+        
+        # 检查是否是JSON格式
+        if update_str.startswith('{'):
+            try:
+                updates = json.loads(update_str)
+            except:
+                return "❌ JSON格式错误"
+        else:
+            # 解析 key=value 格式
+            pattern = r'(\w+)=(?:"([^"]*)"|(\S+))'
+            matches = re.findall(pattern, update_str)
+            for key, val1, val2 in matches:
+                value = val1 if val1 else val2
+                if key == 'display':
+                    updates['display_name'] = value
+                elif key == 'desc':
+                    updates['description'] = value
+                elif key == 'prompt':
+                    updates['sys_prompt'] = value
+                elif key in ['model', 'display_name', 'description', 'sys_prompt']:
+                    updates[key] = value
+        
+        if not updates:
+            return "❌ 未指定要更新的字段"
+        
+        # 应用更新
+        config = agent_manager.agent_configs[agent_name]
+        config.update(updates)
+        
+        # 重新创建Agent
+        agent_manager._create_agent_from_config(agent_name, config)
+        agent_manager.save_agents()
+        
+        return f"✅ Agent @{agent_name} 已更新\n\n更新字段: {', '.join(updates.keys())}"
     
     if text.startswith("/setmodel "):
         parts = text[10:].split()
