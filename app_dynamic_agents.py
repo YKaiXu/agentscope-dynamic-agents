@@ -301,6 +301,19 @@ class AgentManager:
 
 # 命令帮助信息
 COMMAND_HELP = {
+    "agenthelp": """📌 /agenthelp - 查看所有命令
+
+可用命令:
+  /create   - 创建Agent
+  /delete   - 删除Agent
+  /setmodel - 设置Agent模型
+  /list     - 列出所有Agent
+  /models   - 列出所有模型
+  /addmodel - 添加模型
+  /delmodel - 删除模型
+
+查看详细帮助: /命令 help
+例如: /create help""",
     "create": """📌 /create - 创建Agent
 
 用法:
@@ -372,6 +385,16 @@ JSON创建:
 注意: 
   - 默认模型(default)无法删除
   - 删除后使用该模型的Agent会自动切换到default""",
+    "chat": """📌 @<名称> - 与Agent对话
+
+用法:
+  @<Agent名称> <问题>
+
+示例:
+  @py 如何优化Python代码？
+  @fe Vue和React有什么区别？
+
+注意: Agent名称区分大小写""",
 }
 
 
@@ -475,7 +498,11 @@ def call_agent_sync(agent: ReActAgent, message: str) -> str:
 def process_message_sync(text: str, user_id: str = "default") -> str:
     text = text.strip()
     
-    # === 命令帮助 ===
+    # === 总命令帮助 ===
+    if text in ["/agenthelp", "/commands", "/cmds"]:
+        return COMMAND_HELP.get("agenthelp", "无帮助信息")
+    
+    # === 各命令单独帮助 ===
     if text in ["/create help", "/create ?"]:
         return COMMAND_HELP.get("create", "无帮助信息")
     if text in ["/delete help", "/delete ?"]:
@@ -490,6 +517,8 @@ def process_message_sync(text: str, user_id: str = "default") -> str:
         return COMMAND_HELP.get("addmodel", "无帮助信息")
     if text in ["/delmodel help", "/delmodel ?"]:
         return COMMAND_HELP.get("delmodel", "无帮助信息")
+    if text in ["/chat help", "/chat ?"]:
+        return COMMAND_HELP.get("chat", "无帮助信息")
     
     # === 模型管理 ===
     if text in ["/models", "/listmodels"]:
@@ -576,26 +605,7 @@ def process_message_sync(text: str, user_id: str = "default") -> str:
         return result
     
     if text == "/help":
-        return """🤖 动态Agent系统
-
-=== 创建Agent ===
-
-方式1 - 简单创建:
-  /create 一个Python专家           # 自动生成名字
-  /create py 一个Python专家        # 指定名字"py"
-
-方式2 - 结构化创建:
-  /create name=py display="Python专家" desc="Python编程专家" prompt="你是Python专家" model=default
-
-方式3 - JSON创建:
-  /create {"name":"py","display_name":"Python专家","sys_prompt":"..."}
-
-=== 其他命令 ===
-/delete <名称>        删除Agent
-/setmodel <Agent> <模型>  设置模型
-/list                 列出Agent
-/models               列出模型
-@<名称> <问题>        与Agent对话"""
+        return COMMAND_HELP.get("agenthelp", "无帮助信息")
     
     # 调用Agent
     agent_match = re.match(r'^@([\w-]+)\s+(.+)$', text)
