@@ -11,7 +11,6 @@
 - ✅ 动态创建Agent（支持自定义简短名字）
 - ✅ 独立LLM模型分配
 - ✅ 结构化命令支持
-- ✅ 钉钉Stream集成
 - ✅ 完全符合AgentScope 1.0.16规范
 
 ## 安装说明
@@ -34,14 +33,12 @@ source venv/bin/activate  # Linux/Mac
 # 或 venv\Scripts\activate  # Windows
 
 # 3. 安装依赖
-pip install agentscope flask openai dingtalk-stream
+pip install agentscope flask openai
 
 # 4. 配置环境变量
 export MODEL_NAME="your-model-name"
 export MODEL_API_KEY="your-api-key"
 export MODEL_BASE_URL="your-api-base-url"
-export DINGTALK_CLIENT_ID="your-dingtalk-client-id"      # 可选
-export DINGTALK_CLIENT_SECRET="your-dingtalk-client-secret"  # 可选
 
 # 5. 启动服务
 python app_dynamic_agents.py
@@ -209,7 +206,7 @@ response = await agent(Msg(name='user', role='user', content='xxx'))
 - [AgentScope 官方仓库](https://github.com/agentscope-ai/agentscope)
 - [AgentScope Runtime](https://github.com/agentscope-ai/agentscope-runtime)
 - [AgentScope Studio](https://github.com/agentscope-ai/agentscope-studio)
-- [AgentScope DingTalk Bot](https://github.com/YKaiXu/agentscope-dingtalk-bot)
+- [AgentScope DingTalk Bot](https://github.com/YKaiXu/agentscope-dingtalk-bot) - 钉钉集成插件
 
 ## 许可证
 
