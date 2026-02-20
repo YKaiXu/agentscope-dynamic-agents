@@ -1,0 +1,10 @@
+{
+  "python_expert": {
+    "name": "python_expert",
+    "display_name": "Python Expert",
+    "description": "Expert in Python programming",
+    "sys_prompt": "You are a Python programming expert...",
+    "created_at": "2026-01-01T00:00:00"
+  }
+}
+
