@@ -1,0 +1,23 @@
+[Unit]
+Description=AgentScope Dynamic Agents Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/agentscope
+Environment=PATH=/opt/agentscope/venv/bin:/usr/local/bin:/usr/bin:/bin
+Environment=MODEL_NAME=your-model-name
+Environment=MODEL_API_KEY=your-api-key
+Environment=MODEL_BASE_URL=your-api-base-url
+Environment=DINGTALK_CLIENT_ID=your-client-id
+Environment=DINGTALK_CLIENT_SECRET=your-client-secret
+ExecStart=/opt/agentscope/venv/bin/python /opt/agentscope/app_dynamic_agents.py
+Restart=always
+RestartSec=5
+StandardOutput=append:/opt/agentscope/logs/service.log
+StandardError=append:/opt/agentscope/logs/service.log
+
+[Install]
+WantedBy=multi-user.target
+

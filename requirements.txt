@@ -1,0 +1,7 @@
+agentscope>=1.0.16
+agentscope-runtime>=1.0.0
+flask>=2.0.0
+openai>=1.0.0
+dingtalk-stream>=1.0.0
+asyncssh>=2.0.0
+
