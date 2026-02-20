@@ -299,6 +299,82 @@ class AgentManager:
         return False
 
 
+# 命令帮助信息
+COMMAND_HELP = {
+    "create": """📌 /create - 创建Agent
+
+用法:
+  /create <描述>                    # 自动生成名字
+  /create <名字> <描述>             # 指定名字
+  /create <名字> <描述> <模型>      # 指定名字和模型
+
+结构化创建:
+  /create name=py display="Python专家" desc="描述" prompt="提示词" model=default
+
+JSON创建:
+  /create {"name":"py","display_name":"Python专家","sys_prompt":"..."}
+
+示例:
+  /create 一个Python专家
+  /create py 一个Python专家
+  /create py 一个Python专家 gpt4""",
+    "delete": """📌 /delete - 删除Agent
+
+用法:
+  /delete <Agent名称>
+
+示例:
+  /delete py
+  /delete python_expert
+
+注意: 删除后无法恢复""",
+    "setmodel": """📌 /setmodel - 设置Agent使用的模型
+
+用法:
+  /setmodel <Agent名称> <模型名称>
+
+示例:
+  /setmodel py gpt4
+  /setmodel python_expert default
+
+查看可用模型: /models""",
+    "list": """📌 /list - 列出所有Agent
+
+用法:
+  /list
+  /agents
+
+显示: 名称、显示名、使用的模型""",
+    "models": """📌 /models - 列出所有模型
+
+用法:
+  /models
+
+显示: 模型名称、模型类型、Base URL""",
+    "addmodel": """📌 /addmodel - 添加模型
+
+用法:
+  /addmodel <名称> <模型名> <API Key> <Base URL>
+
+示例:
+  /addmodel gpt4 gpt-4 sk-xxx https://api.openai.com/v1
+  /addmodel deepseek deepseek-chat sk-xxx https://api.deepseek.com/v1
+
+注意: API Key会保存在配置文件中""",
+    "delmodel": """📌 /delmodel - 删除模型
+
+用法:
+  /delmodel <模型名称>
+
+示例:
+  /delmodel gpt4
+
+注意: 
+  - 默认模型(default)无法删除
+  - 删除后使用该模型的Agent会自动切换到default""",
+}
+
+
 MAIN_ASSISTANT_PROMPT = """你是一个智能助手系统的主控助手。
 
 ## Agent管理命令
@@ -398,6 +474,22 @@ def call_agent_sync(agent: ReActAgent, message: str) -> str:
 
 def process_message_sync(text: str, user_id: str = "default") -> str:
     text = text.strip()
+    
+    # === 命令帮助 ===
+    if text in ["/create help", "/create ?"]:
+        return COMMAND_HELP.get("create", "无帮助信息")
+    if text in ["/delete help", "/delete ?"]:
+        return COMMAND_HELP.get("delete", "无帮助信息")
+    if text in ["/setmodel help", "/setmodel ?"]:
+        return COMMAND_HELP.get("setmodel", "无帮助信息")
+    if text in ["/list help", "/list ?", "/agents help", "/agents ?"]:
+        return COMMAND_HELP.get("list", "无帮助信息")
+    if text in ["/models help", "/models ?"]:
+        return COMMAND_HELP.get("models", "无帮助信息")
+    if text in ["/addmodel help", "/addmodel ?"]:
+        return COMMAND_HELP.get("addmodel", "无帮助信息")
+    if text in ["/delmodel help", "/delmodel ?"]:
+        return COMMAND_HELP.get("delmodel", "无帮助信息")
     
     # === 模型管理 ===
     if text in ["/models", "/listmodels"]:
