@@ -9,6 +9,7 @@
 ## 功能特性
 
 - ✅ 动态创建Agent（支持自定义简短名字）
+- ✅ 更新Agent配置
 - ✅ 独立LLM模型分配
 - ✅ 结构化命令支持
 - ✅ 完全符合AgentScope 1.0.16规范
@@ -64,48 +65,152 @@ journalctl -u agentscope -f
 
 ## 全部命令列表
 
+### 查看帮助
+
+| 命令 | 说明 |
+|------|------|
+| `/agenthelp` | 查看所有命令列表 |
+| `/help` | 同上（快捷方式） |
+| `/命令 help` | 查看单个命令详细帮助，如 `/create help` |
+
 ### Agent管理命令
 
 | 命令 | 功能 | 示例 |
 |------|------|------|
-| `/create [name] <描述>` | 创建Agent | `/create py 一个Python专家` |
-| `/create {json}` | JSON格式创建 | `/create {"name":"py","display_name":"Python专家","sys_prompt":"..."}` |
-| `/delete <名称>` | 删除Agent | `/delete py` |
-| `/setmodel <Agent> <模型>` | 设置Agent使用的模型 | `/setmodel py gpt4` |
-| `/list` 或 `/agents` | 列出所有Agent | `/list` |
-| `@<名称> <问题>` | 与Agent对话 | `@py 如何优化代码？` |
+| `/create` | 创建Agent | `/create py 一个Python专家` |
+| `/update` | 更新Agent配置 | `/update py display="Python高级专家"` |
+| `/delete` | 删除Agent | `/delete py` |
+| `/setmodel` | 设置Agent使用的模型 | `/setmodel py gpt4` |
+| `/list` | 列出所有Agent | `/list` |
 
 ### 模型管理命令
 
 | 命令 | 功能 | 示例 |
 |------|------|------|
 | `/models` | 列出所有模型 | `/models` |
-| `/addmodel <名称> <模型名> <API Key> <Base URL>` | 添加模型 | `/addmodel gpt4 gpt-4 sk-xxx https://api.openai.com/v1` |
-| `/delmodel <名称>` | 删除模型 | `/delmodel gpt4` |
+| `/addmodel` | 添加模型 | `/addmodel gpt4 gpt-4 sk-xxx https://api.openai.com/v1` |
+| `/delmodel` | 删除模型 | `/delmodel gpt4` |
 
-### 其他命令
+### 对话命令
 
-| 命令 | 功能 |
-|------|------|
-| `/help` | 查看帮助信息 |
+| 命令 | 功能 | 示例 |
+|------|------|------|
+| `@<名称> <问题>` | 与Agent对话 | `@py 如何优化代码？` |
 
-## 创建Agent的三种方式
+## 命令详细使用方法
 
-### 方式1: 简单创建
+### /create - 创建Agent
+
+**方式1: 简单创建**
 ```
 /create 一个Python专家           # 自动生成名字
 /create py 一个Python专家        # 指定名字"py"
 /create py 一个Python专家 gpt4   # 指定名字和模型
 ```
 
-### 方式2: 结构化创建
+**方式2: 结构化创建**
 ```
 /create name=py display="Python专家" desc="Python编程专家" prompt="你是Python专家" model=default
 ```
 
-### 方式3: JSON创建
+**方式3: JSON创建**
 ```
 /create {"name":"py","display_name":"Python专家","description":"Python编程专家","sys_prompt":"你是Python专家","model":"default"}
+```
+
+### /update - 更新Agent配置
+
+```
+/update <Agent名称> <字段>=<值> [<字段>=<值>...]
+
+可更新字段:
+  display_name - 显示名称
+  description  - 描述
+  sys_prompt   - 系统提示词
+  model        - 使用的模型
+
+示例:
+  /update py display="Python高级专家"
+  /update py sys_prompt="你是Python专家..." model=gpt4
+  /update py {"display_name":"Python专家","sys_prompt":"..."}
+```
+
+### /delete - 删除Agent
+
+```
+/delete <Agent名称>
+
+示例:
+  /delete py
+  /delete python_expert
+
+注意: 删除后无法恢复
+```
+
+### /setmodel - 设置Agent模型
+
+```
+/setmodel <Agent名称> <模型名称>
+
+示例:
+  /setmodel py gpt4
+  /setmodel python_expert default
+
+查看可用模型: /models
+```
+
+### /list - 列出所有Agent
+
+```
+/list
+/agents
+
+显示: 名称、显示名、使用的模型
+```
+
+### /models - 列出所有模型
+
+```
+/models
+
+显示: 模型名称、模型类型、Base URL
+```
+
+### /addmodel - 添加模型
+
+```
+/addmodel <名称> <模型名> <API Key> <Base URL>
+
+示例:
+  /addmodel gpt4 gpt-4 sk-xxx https://api.openai.com/v1
+  /addmodel deepseek deepseek-chat sk-xxx https://api.deepseek.com/v1
+
+注意: API Key会保存在配置文件中
+```
+
+### /delmodel - 删除模型
+
+```
+/delmodel <模型名称>
+
+示例:
+  /delmodel gpt4
+
+注意: 
+  - 默认模型(default)无法删除
+  - 删除后使用该模型的Agent会自动切换到default
+```
+
+### @<名称> - 与Agent对话
+
+```
+@<Agent名称> <问题>
+
+示例:
+  @py 如何优化Python代码？
+  @fe Vue和React有什么区别？
+
+注意: Agent名称区分大小写
 ```
 
 ## AgentScope Agent字段说明
