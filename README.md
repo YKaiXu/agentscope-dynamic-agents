@@ -161,7 +161,7 @@ curl -X POST http://localhost:5000/chat   -H "Content-Type: application/json"   
 - [AgentScope 官方仓库](https://github.com/agentscope-ai/agentscope)
 - [AgentScope Runtime](https://github.com/agentscope-ai/agentscope-runtime)
 - [AgentScope Studio](https://github.com/agentscope-ai/agentscope-studio)
-- [DingTalk Stream Bot (AgentScope集成版)](https://github.com/YKaiXu/dingtalk-stream-bot)
+- [DingTalk Stream Bot (AgentScope集成版)](https://github.com/YKaiXu/agentscope-dingtalk-bot)
 
 ## 许可证
 
