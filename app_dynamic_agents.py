@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 AgentScope Dynamic Agent Management System
-支持通过对话创建Agent并分配独立LLM
+支持结构化命令创建Agent，允许自定义简短名字
 """
 import asyncio
 import json
@@ -29,7 +29,6 @@ try:
 except ImportError:
     DINGTALK_AVAILABLE = False
 
-# Logging configuration
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -42,11 +41,9 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-# Configuration
 AGENTS_FILE = "/opt/agentscope/dynamic_agents.json"
 MODELS_FILE = "/opt/agentscope/models_config.json"
 
-# Default model configuration
 DEFAULT_MODEL_CONFIG = {
     "model_name": "deepseek-ai/deepseek-v3.2",
     "api_key": "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",
@@ -58,7 +55,6 @@ DINGTALK_CONFIG = {
     "client_secret": "4ByZlcFtACSDzvcaIM1YTQTtsuAgE-GyxRQ-EVzlbPknjX0Z4SVn7s1BexLjL9Jr"
 }
 
-# Message deduplication
 processed_messages = {}
 DEDUP_WINDOW = 60
 
@@ -72,16 +68,11 @@ def is_duplicate(message_id: str) -> bool:
     processed_messages[message_id] = now
     return False
 
-# Initialize AgentScope
 agentscope.init(project='dynamic_agents', logging_path='/opt/agentscope/logs/agentscope.log')
-
-# Shared formatter
 shared_formatter = OpenAIChatFormatter()
 
 
 class ModelManager:
-    """LLM模型管理器"""
-    
     def __init__(self):
         self.models: Dict[str, OpenAIChatModel] = {}
         self.model_configs: Dict[str, dict] = {}
@@ -97,7 +88,6 @@ class ModelManager:
                 logger.info(f"Loaded {len(self.models)} models")
             except Exception as e:
                 logger.error(f"Load models error: {e}")
-        # 确保有默认模型
         if "default" not in self.models:
             self._create_model("default", DEFAULT_MODEL_CONFIG)
             self.save_models()
@@ -137,7 +127,7 @@ class ModelManager:
     
     def delete_model(self, name: str) -> bool:
         if name == "default":
-            return False  # 不能删除默认模型
+            return False
         if name in self.models:
             del self.models[name]
             del self.model_configs[name]
@@ -147,8 +137,6 @@ class ModelManager:
 
 
 class AgentManager:
-    """动态Agent管理器"""
-    
     def __init__(self, model_manager: ModelManager):
         self.agents: Dict[str, ReActAgent] = {}
         self.agent_configs: Dict[str, dict] = {}
@@ -175,10 +163,8 @@ class AgentManager:
     
     def _create_agent_from_config(self, name: str, config: dict) -> Optional[ReActAgent]:
         try:
-            # 获取Agent指定的模型，如果没有则使用默认模型
             model_name = config.get("model", "default")
             model = self.model_manager.get_model(model_name)
-            
             if not model:
                 model = self.model_manager.get_model("default")
             
@@ -195,8 +181,34 @@ class AgentManager:
             logger.error(f"Create agent error: {e}")
             return None
     
-    def create_agent_from_description_sync(self, description: str, model: str = "default") -> Optional[dict]:
-        """创建Agent并指定模型"""
+    def create_agent_with_config(self, config: dict) -> Optional[dict]:
+        """使用完整配置创建Agent"""
+        try:
+            name = config.get("name")
+            if not name:
+                return None
+            
+            # 验证name格式（只允许字母、数字、下划线、短横线）
+            if not re.match(r'^[\w-]+$', name):
+                return None
+            
+            # 设置默认值
+            config.setdefault("display_name", name)
+            config.setdefault("description", "")
+            config.setdefault("model", "default")
+            config.setdefault("sys_prompt", "你是一个有用的助手。")
+            config["created_at"] = datetime.now().isoformat()
+            
+            agent = self._create_agent_from_config(name, config)
+            if agent:
+                self.save_agents()
+                return config
+        except Exception as e:
+            logger.error(f"Create agent with config error: {e}")
+        return None
+    
+    def create_agent_from_description(self, description: str, name: str = None, model: str = "default") -> Optional[dict]:
+        """从描述创建Agent，可选指定名字"""
         try:
             client = openai.OpenAI(
                 api_key=DEFAULT_MODEL_CONFIG["api_key"],
@@ -209,11 +221,14 @@ class AgentManager:
 
 返回格式:
 {{
-    "name": "英文标识符(如python_expert)",
-    "display_name": "显示名称",
+    "display_name": "显示名称（中文）",
     "description": "智能体描述",
     "sys_prompt": "系统提示词，定义角色和能力"
-}}"""
+}}
+
+注意：
+- name字段不需要返回，会单独指定
+- sys_prompt要详细，定义Agent的专业能力和回答风格"""
 
             response = client.chat.completions.create(
                 model=DEFAULT_MODEL_CONFIG["model_name"],
@@ -226,26 +241,45 @@ class AgentManager:
             json_match = re.search(r'\{[\s\S]*\}', result)
             if json_match:
                 config = json.loads(json_match.group())
-                name = config.get("name", f"agent_{datetime.now().strftime('%Y%m%d%H%M%S')}")
-                config["created_at"] = datetime.now().isoformat()
-                config["model"] = model  # 设置模型
-                agent = self._create_agent_from_config(name, config)
-                if agent:
-                    self.save_agents()
-                    return {"name": name, **config}
+                # 使用指定的name或生成简短name
+                if not name:
+                    # 从display_name生成简短name
+                    display_name = config.get("display_name", "agent")
+                    name = self._generate_short_name(display_name)
+                
+                config["name"] = name
+                config["model"] = model
+                return self.create_agent_with_config(config)
         except Exception as e:
             logger.error(f"Create agent from description error: {e}")
         return None
     
+    def _generate_short_name(self, display_name: str) -> str:
+        """从显示名称生成简短的英文名"""
+        # 常见中文到英文的映射
+        name_map = {
+            "python": "py", "java": "java", "前端": "fe", "后端": "be",
+            "数据": "data", "分析": "ana", "专家": "pro", "助手": "bot",
+            "工程师": "eng", "开发": "dev", "设计": "design", "产品": "pm",
+            "测试": "qa", "运维": "ops", "安全": "sec", "算法": "algo",
+            "机器学习": "ml", "深度学习": "dl", "人工智能": "ai",
+            "系统": "sys", "网络": "net", "数据库": "db", "架构": "arch"
+        }
+        
+        name = display_name.lower()
+        for cn, en in name_map.items():
+            if cn in name:
+                return en
+        
+        # 默认使用时间戳
+        return f"a{datetime.now().strftime('%m%d%H%M')}"
+    
     def set_agent_model(self, agent_name: str, model_name: str) -> bool:
-        """设置Agent使用的模型"""
         if agent_name not in self.agent_configs:
             return False
         if model_name not in self.model_manager.models:
             return False
-        
         self.agent_configs[agent_name]["model"] = model_name
-        # 重新创建Agent以应用新模型
         self._create_agent_from_config(agent_name, self.agent_configs[agent_name])
         self.save_agents()
         return True
@@ -265,43 +299,35 @@ class AgentManager:
         return False
 
 
-# Main assistant system prompt
-MAIN_ASSISTANT_PROMPT = """你是一个智能助手系统的主控助手。你的职责是帮助用户使用系统功能。
+MAIN_ASSISTANT_PROMPT = """你是一个智能助手系统的主控助手。
 
-## 系统功能
+## Agent管理命令
 
-你可以帮助用户管理专业Agent（智能体）和LLM模型：
+### 方式1: 简单创建
+/create <描述>                    # 自动生成简短名字
+/create py <描述>                 # 指定名字为"py"
 
-### Agent管理
-1. **创建Agent**: /create <描述> [模型名]
-   - 例: /create 一个Python专家
-   - 例: /create 一个Python专家 default
-   
-2. **删除Agent**: /delete <名称>
+### 方式2: 结构化创建
+/create name=py display="Python专家" desc="Python编程专家" prompt="你是Python专家..." model=default
 
-3. **查看Agent**: /list 或 /agents
+### 方式3: JSON创建
+/create {"name":"py","display_name":"Python专家","sys_prompt":"..."}
 
-4. **设置Agent模型**: /setmodel <Agent名> <模型名>
+### 其他命令
+/delete <名称>        # 删除Agent
+/setmodel <Agent> <模型>  # 设置模型
+/list                 # 列出Agent
 
-### 模型管理
-1. **查看模型**: /models
+## 模型管理命令
+/models               # 列出模型
+/addmodel <名称> <模型> <Key> <URL>  # 添加模型
 
-2. **添加模型**: /addmodel <名称> <模型名> <API Key> <Base URL>
-
-3. **删除模型**: /delmodel <名称>
-
-## 当前可用Agent
-
+## 当前Agent
 {agent_list}
 
-## 当前可用模型
+## 当前模型
+{model_list}"""
 
-{model_list}
-
-请友好、专业地回应用户。"""
-
-
-# Initialize managers
 model_manager = ModelManager()
 agent_manager = AgentManager(model_manager)
 
@@ -312,7 +338,7 @@ def get_main_assistant_prompt() -> str:
         agent_list = "\n".join([f"- @{name}: {cfg.get('display_name', name)} (模型: {cfg.get('model', 'default')})" 
                                 for name, cfg in agents.items()])
     else:
-        agent_list = "暂无Agent，使用 /create <描述> 创建"
+        agent_list = "暂无Agent"
     
     models = model_manager.list_models()
     model_list = "\n".join([f"- {name}: {cfg.get('model_name', 'unknown')}" 
@@ -321,8 +347,41 @@ def get_main_assistant_prompt() -> str:
     return MAIN_ASSISTANT_PROMPT.format(agent_list=agent_list, model_list=model_list)
 
 
+def parse_structured_create(text: str) -> Optional[dict]:
+    """解析结构化创建命令"""
+    text = text.strip()
+    
+    # 方式1: JSON格式
+    if text.startswith('{'):
+        try:
+            return json.loads(text)
+        except:
+            pass
+    
+    # 方式2: key=value格式
+    if '=' in text:
+        config = {}
+        # 匹配 key="value" 或 key=value
+        pattern = r'(\w+)=(?:"([^"]*)"|(\S+))'
+        matches = re.findall(pattern, text)
+        for key, val1, val2 in matches:
+            value = val1 if val1 else val2
+            if key == 'name':
+                config['name'] = value
+            elif key == 'display':
+                config['display_name'] = value
+            elif key == 'desc':
+                config['description'] = value
+            elif key == 'prompt':
+                config['sys_prompt'] = value
+            elif key == 'model':
+                config['model'] = value
+        return config if config else None
+    
+    return None
+
+
 def call_agent_sync(agent: ReActAgent, message: str) -> str:
-    """同步方式调用AgentScope Agent"""
     try:
         msg = Msg(name="user", role="user", content=message)
         loop = asyncio.new_event_loop()
@@ -338,12 +397,9 @@ def call_agent_sync(agent: ReActAgent, message: str) -> str:
 
 
 def process_message_sync(text: str, user_id: str = "default") -> str:
-    """同步版本的消息处理"""
     text = text.strip()
     
-    # === 模型管理命令 ===
-    
-    # 列出模型
+    # === 模型管理 ===
     if text in ["/models", "/listmodels"]:
         models = model_manager.list_models()
         if not models:
@@ -351,71 +407,72 @@ def process_message_sync(text: str, user_id: str = "default") -> str:
         result = "📋 模型列表:\n\n"
         for name, cfg in models.items():
             result += f"• {name}: {cfg.get('model_name', 'unknown')}\n"
-            result += f"  Base URL: {cfg.get('base_url', 'N/A')}\n\n"
         return result
     
-    # 添加模型
     if text.startswith("/addmodel "):
         parts = text[10:].split()
         if len(parts) >= 4:
             name, model_name, api_key, base_url = parts[0], parts[1], parts[2], parts[3]
-            config = {
-                "model_name": model_name,
-                "api_key": api_key,
-                "base_url": base_url
-            }
-            if model_manager.add_model(name, config):
+            if model_manager.add_model(name, {"model_name": model_name, "api_key": api_key, "base_url": base_url}):
                 return f"✅ 模型 '{name}' 添加成功"
             return "❌ 模型添加失败"
         return "用法: /addmodel <名称> <模型名> <API Key> <Base URL>"
     
-    # 删除模型
     if text.startswith("/delmodel "):
         name = text[10:].strip()
         if model_manager.delete_model(name):
             return f"✅ 模型 '{name}' 已删除"
-        return f"❌ 无法删除模型 '{name}' (默认模型不可删除)"
+        return f"❌ 无法删除模型 '{name}'"
     
-    # 设置Agent模型
-    if text.startswith("/setmodel "):
-        parts = text[10:].split()
-        if len(parts) >= 2:
-            agent_name, model_name = parts[0], parts[1]
-            if agent_manager.set_agent_model(agent_name, model_name):
-                return f"✅ Agent '@{agent_name}' 已设置为使用模型 '{model_name}'"
-            return f"❌ 设置失败，请检查Agent和模型名称"
-        return "用法: /setmodel <Agent名> <模型名>"
-    
-    # === Agent管理命令 ===
-    
-    # 创建Agent (支持指定模型)
+    # === Agent管理 ===
     if text.startswith("/create "):
         rest = text[8:].strip()
-        parts = rest.rsplit(None, 1)  # 从右边分割一次
         
-        # 检查最后一个词是否是模型名
-        model_name = "default"
-        description = rest
+        # 检查是否是结构化格式
+        structured = parse_structured_create(rest)
+        if structured:
+            config = agent_manager.create_agent_with_config(structured)
+            if config:
+                return f"✅ Agent创建成功！\n\n名称: @{config['name']}\n显示名: {config.get('display_name', config['name'])}\n模型: {config.get('model', 'default')}\n\n使用: @{config['name']} 你的问题"
+            return "❌ 创建失败，请检查配置格式"
         
-        if len(parts) == 2:
-            potential_model = parts[1]
-            if potential_model in model_manager.models:
-                model_name = potential_model
-                description = parts[0]
+        # 检查是否指定了名字
+        parts = rest.split(None, 1)
+        if len(parts) == 2 and re.match(r'^[\w-]+$', parts[0]) and len(parts[0]) <= 10:
+            # 第一个词是名字（短于10个字符的英文）
+            name = parts[0]
+            description = parts[1]
+        else:
+            name = None
+            description = rest
         
-        config = agent_manager.create_agent_from_description_sync(description, model_name)
+        # 检查描述末尾是否指定了模型
+        model = "default"
+        desc_parts = description.rsplit(None, 1)
+        if len(desc_parts) == 2 and desc_parts[1] in model_manager.models:
+            model = desc_parts[1]
+            description = desc_parts[0]
+        
+        config = agent_manager.create_agent_from_description(description, name, model)
         if config:
             return f"✅ Agent创建成功！\n\n名称: @{config['name']}\n显示名: {config.get('display_name', config['name'])}\n描述: {config.get('description', '')}\n模型: {config.get('model', 'default')}\n\n使用: @{config['name']} 你的问题"
         return "❌ 创建失败，请重试"
     
-    # 删除Agent
     if text.startswith("/delete "):
         name = text[8:].strip()
         if agent_manager.delete_agent(name):
             return f"✅ 已删除Agent @{name}"
         return f"❌ Agent @{name} 不存在"
     
-    # 列出Agent
+    if text.startswith("/setmodel "):
+        parts = text[10:].split()
+        if len(parts) >= 2:
+            agent_name, model_name = parts[0], parts[1]
+            if agent_manager.set_agent_model(agent_name, model_name):
+                return f"✅ Agent '@{agent_name}' 已设置为使用模型 '{model_name}'"
+            return "❌ 设置失败，请检查Agent和模型名称"
+        return "用法: /setmodel <Agent名> <模型名>"
+    
     if text in ["/list", "/agents"]:
         agents = agent_manager.list_agents()
         if not agents:
@@ -423,36 +480,32 @@ def process_message_sync(text: str, user_id: str = "default") -> str:
         result = "📋 Agent列表:\n\n"
         for name, cfg in agents.items():
             result += f"• @{name} - {cfg.get('display_name', name)}\n"
-            result += f"  描述: {cfg.get('description', '')}\n"
             result += f"  模型: {cfg.get('model', 'default')}\n\n"
         return result
     
-    # 帮助
     if text == "/help":
         return """🤖 动态Agent系统
 
-=== Agent管理 ===
-/create <描述> [模型名] - 创建Agent
-  例: /create 一个Python专家
-  例: /create 一个Python专家 gpt4
+=== 创建Agent ===
 
-/delete <名称> - 删除Agent
+方式1 - 简单创建:
+  /create 一个Python专家           # 自动生成名字
+  /create py 一个Python专家        # 指定名字"py"
 
-/setmodel <Agent名> <模型名> - 设置Agent使用的模型
+方式2 - 结构化创建:
+  /create name=py display="Python专家" desc="Python编程专家" prompt="你是Python专家" model=default
 
-/list - 查看所有Agent
+方式3 - JSON创建:
+  /create {"name":"py","display_name":"Python专家","sys_prompt":"..."}
 
-=== 模型管理 ===
-/models - 查看所有模型
-
-/addmodel <名称> <模型名> <API Key> <Base URL> - 添加模型
-
-/delmodel <名称> - 删除模型
-
-=== 对话 ===
-@<名称> <问题> - 与Agent对话"""
+=== 其他命令 ===
+/delete <名称>        删除Agent
+/setmodel <Agent> <模型>  设置模型
+/list                 列出Agent
+/models               列出模型
+@<名称> <问题>        与Agent对话"""
     
-    # 调用指定Agent
+    # 调用Agent
     agent_match = re.match(r'^@([\w-]+)\s+(.+)$', text)
     if agent_match:
         agent_name = agent_match.group(1)
